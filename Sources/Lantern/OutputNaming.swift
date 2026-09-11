@@ -16,12 +16,16 @@ enum OutputNaming {
         }
     }
 
-    private static let formatter: DateFormatter = {
+    /* A formatter per call: a shared one whose time zone is set per call is
+       a race (DateFormatter isn't thread-safe), which the parallel test
+       runner exposed on a UTC machine. */
+    private static func formatter(_ timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        formatter.timeZone = timeZone
         return formatter
-    }()
+    }
 
     /// The name for `date`, with " (2)", " (3)", … appended while `exists`
     /// says the name is taken.
@@ -29,8 +33,7 @@ enum OutputNaming {
         kind: Kind, date: Date, ext: String, timeZone: TimeZone = .current,
         exists: (String) -> Bool = { _ in false }
     ) -> String {
-        formatter.timeZone = timeZone
-        let base = "\(kind.prefix) \(formatter.string(from: date))"
+        let base = "\(kind.prefix) \(formatter(timeZone).string(from: date))"
         var candidate = "\(base).\(ext)"
         var counter = 2
         while exists(candidate) {

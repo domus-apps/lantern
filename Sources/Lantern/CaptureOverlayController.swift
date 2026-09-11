@@ -479,16 +479,30 @@ private final class OverlayView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard mode.scope == .area, drag != nil else { return }
+        guard mode.scope == .area, let finished = drag else { return }
         drag = nil
         if let rect = selection {
             if rect.width < 4 || rect.height < 4 {
                 selection = nil
+            } else if case .moving = finished {
+                /* A move keeps its exact size: only the origin is snapped.
+                   (`integral` would round the edges outward and grow the
+                   selection by up to a point per side on every move.) */
+                selection = CGRect(
+                    x: rect.minX.rounded(), y: rect.minY.rounded(),
+                    width: rect.width, height: rect.height)
             } else {
-                selection = rect.integral
+                selection = Self.snapped(rect)
             }
         }
         applyCursor()
+    }
+
+    /* Edges rounded to the nearest point, never outward. */
+    static func snapped(_ rect: CGRect) -> CGRect {
+        let minX = rect.minX.rounded(), maxX = rect.maxX.rounded()
+        let minY = rect.minY.rounded(), maxY = rect.maxY.rounded()
+        return CGRect(x: minX, y: minY, width: max(maxX - minX, 1), height: max(maxY - minY, 1))
     }
 
     private func clamp(_ point: CGPoint) -> CGPoint {

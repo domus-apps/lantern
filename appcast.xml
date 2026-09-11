@@ -37,5 +37,47 @@
         sparkle:edSignature="Yq3a7UswBFA+J9Iz5w4fUDqOuuG/18mRwlbcVo2kdnf8fPrNCEBgGIeRG3/MkdzJYUiSu38Jth90h2nqbDrRBg==" length="2863543"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Lantern v1.0.1</title>
+      <link>https://github.com/domus-apps/lantern/releases/tag/v1.0.1</link>
+      <pubDate>Fri, 11 Sep 2026 04:44:21 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>1.0.1</h2>
+<h3>Fixed</h3>
+<ul>
+<li>Opening the capture bar no longer asks for the Device Control and Data Access permission. Screen Recording is the only permission Lantern needs.</li>
+</ul>
+<h2>1.0.0</h2>
+<p>The first release.</p>
+<ul>
+<li>Press ⌥⌘S for a capture bar like the system's: an image or a recording of the whole screen, one window, or an area you drag.</li>
+<li>Every capture opens in an editor first, where you choose the size, the frame rate, and PNG, MP4, or GIF, and trim recordings.</li>
+<li>GIFs loop forever and are encoded by macOS itself, at up to 30 frames per second.</li>
+<li>Save writes to the Desktop or a folder of your choice and copies images to the clipboard as well.</li>
+<li>While recording, the menu bar shows a stop button with the elapsed time.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>1.0.1</h2>
+<h3>수정</h3>
+<ul>
+<li>캡처 막대를 열 때 '기기 제어 및 데이터 접근' 권한을 요청하던 문제를 고쳤습니다. Lantern에 필요한 권한은 화면 기록 하나뿐입니다.</li>
+</ul>
+<h2>1.0.0</h2>
+<p>첫 릴리스입니다.</p>
+<ul>
+<li>⌥⌘S를 누르면 시스템과 같은 캡처 막대가 나타나, 화면 전체·윈도우 하나·드래그한 영역을 이미지나 영상으로 담을 수 있습니다.</li>
+<li>캡처한 내용은 먼저 편집 창에서 크기와 프레임 속도, PNG·MP4·GIF 포맷을 고르고, 영상은 앞뒤를 다듬을 수 있습니다.</li>
+<li>GIF는 macOS가 직접 인코딩하며 무한 반복되고 최대 30fps로 재생됩니다.</li>
+<li>저장하면 데스크탑이나 지정한 폴더에 쓰이고, 이미지는 클립보드에도 복사됩니다.</li>
+<li>녹화 중에는 메뉴 막대에 경과 시간과 함께 중단 버튼이 표시됩니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/lantern/releases/download/v1.0.1/Lantern.zip"
+        sparkle:edSignature="a5c0b454TaV+K0zFf035djqEIi77zSjXjp3YdyhFqh06TtvQlzIoIrov1Y2SbAzx0J4Ec1Q48EPvAHA+RK74BA==" length="2863238"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>

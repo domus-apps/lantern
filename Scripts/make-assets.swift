@@ -518,3 +518,22 @@ withContext(og) { cg in
     drawSocialPreview(cg, icon: bannerIcon)
 }
 savePNG(og, "Assets/og-image.png")
+
+/* Keep the Icon Composer document's background in step with the icon's own
+   gradient. macOS 26 renders the document (not the PNG above), and its
+   single-color automatic-gradient came out nearly flat in the Dock, while
+   the family's two high-chroma stops lived only in the PNG. Only the fill
+   is rewritten; the layer groups stay as authored. */
+let iconDocumentPath = "Assets/AppIcon.icon/icon.json"
+if let data = FileManager.default.contents(atPath: iconDocumentPath),
+   var document = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+    func srgb(_ hex: UInt32) -> String {
+        let r = Double((hex >> 16) & 0xFF) / 255, g = Double((hex >> 8) & 0xFF) / 255, b = Double(hex & 0xFF) / 255
+        return String(format: "extended-srgb:%.5f,%.5f,%.5f,1.00000", r, g, b)
+    }
+    document["fill"] = ["linear-gradient": [srgb(keyTop), srgb(keyBottom)]]
+    let out = try! JSONSerialization.data(
+        withJSONObject: document, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    try! (String(data: out, encoding: .utf8)! + "\n").write(toFile: iconDocumentPath, atomically: true, encoding: .utf8)
+    print("wrote \(iconDocumentPath)")
+}

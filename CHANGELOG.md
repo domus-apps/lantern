@@ -4,6 +4,12 @@ All notable changes to Lantern are documented here. The release workflow publish
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.0.1
+
+### Fixed
+
+- Opening the capture bar no longer asks for the Device Control and Data Access permission. Screen Recording is the only permission Lantern needs.
+
 ## 1.0.0
 
 The first release.

@@ -39,17 +39,15 @@ final class CaptureOverlayController {
 
     func show() {
         build()
-        /* Nothing sets the cursor until the mouse moves: cursor rects and
-           tracking areas both wait for the first event, and the panel
-           appearing under the pointer resets it to the arrow. Set it again
-           once the panels are up, and nudge the window server with a
-           mouse-moved event at the current position so the tracking areas
-           fire as if the pointer had just arrived. */
+        /* Nothing sets the cursor until the mouse moves, and the panel
+           appearing under the pointer resets it to the arrow; set it again
+           once the panels are up. (No synthetic mouse events here: posting
+           them needs the "Device Control and Data Access" permission, and
+           with Lantern active for the picker they are not needed.) */
         for delay in [0.05, 0.25] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self, !self.panels.isEmpty else { return }
                 self.panels.first { $0.overlayView.isHovered }?.overlayView.applyCursor()
-                Self.nudgePointer()
             }
         }
         screenObserver = NotificationCenter.default.addObserver(
@@ -112,17 +110,6 @@ final class CaptureOverlayController {
         }
         panels = []
         NSCursor.arrow.set()
-    }
-
-    private static func nudgePointer() {
-        let location = NSEvent.mouseLocation
-        let point = CaptureGeometry.cgPoint(fromAppKit: location, primaryScreenHeight: primaryScreenHeight)
-        guard
-            let event = CGEvent(
-                mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point,
-                mouseButton: .left)
-        else { return }
-        event.post(tap: .cghidEventTap)
     }
 
     // MARK: - Picking

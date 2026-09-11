@@ -13,10 +13,10 @@ shows it the way you want it shown.
 
 ## How it works
 
-Press ⌥⌘S (changeable in Settings) and a bar like the system's ⌘⇧5 appears at
-the bottom of the screen. Pick an image or a recording of the whole display, a
-single window, or an area you drag out, then click Capture or Record. A
-recording is stopped from the menu bar or with the same shortcut.
+Press ⌥⌘S (changeable in Settings) and a capture bar appears at the bottom of
+the screen. Pick an image or a recording of the whole display, a single window,
+or an area you drag out, then click Capture or Record. A recording is stopped
+from the menu bar or with the same shortcut.
 
 Every capture opens in a small editor first. Choose a size (100, 75, 50, or 25
 percent, or a custom width), a frame rate for video, and the format: PNG for

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleAlternateNames</key>
+	<array>
+		<string>랜턴</string>
+		<string>스크린샷</string>
+		<string>화면 캡처</string>
+		<string>화면 녹화</string>
+		<string>screenshot</string>
+		<string>screen recording</string>
+		<string>gif</string>
+	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>Lantern</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.jhaemin.lantern</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ko</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>Lantern</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/domus-apps/lantern/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>231/UKP6u5LElqtTkMp2TwNDsr83lQSxVCiJ4UUMR7I=</string>
+</dict>
+</plist>

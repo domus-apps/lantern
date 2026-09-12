@@ -4,6 +4,13 @@ All notable changes to Lantern are documented here. The release workflow publish
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.0.4
+
+### Changed
+
+- The capture bar and the overlay now fade in and out instead of zooming from the center of the screen.
+- Tooltips on the capture bar's buttons appear sooner.
+
 ## 1.0.3
 
 ### Fixed

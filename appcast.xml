@@ -175,5 +175,51 @@
         sparkle:edSignature="4s6RFdTmVJfJrdPUIqlRwtx8mYoCWoj4wSFg6W9TgEvU7twd609LMaXOo/Nb2jp8SeyMNH4wJponabPSHHj5Cw==" length="3126022"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Lantern v1.0.4</title>
+      <link>https://github.com/domus-apps/lantern/releases/tag/v1.0.4</link>
+      <pubDate>Sat, 12 Sep 2026 01:01:03 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>1.0.4</h2>
+<h3>Changed</h3>
+<ul>
+<li>The capture bar and the overlay now fade in and out instead of zooming from the center of the screen.</li>
+<li>Tooltips on the capture bar's buttons appear sooner.</li>
+</ul>
+<h2>1.0.3</h2>
+<h3>Fixed</h3>
+<ul>
+<li>The app icon's background looked flat in the Dock and Finder. It now shows its gradient.</li>
+</ul>
+<h2>1.0.2</h2>
+<h3>Fixed</h3>
+<ul>
+<li>Moving a selected area no longer makes it slightly larger with every move.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>1.0.4</h2>
+<h3>변경</h3>
+<ul>
+<li>캡처 막대와 오버레이가 화면 가운데에서 확대되는 대신 부드럽게 나타나고 사라집니다.</li>
+<li>캡처 막대 버튼 위에 마우스를 올리면 설명이 더 빨리 나타납니다.</li>
+</ul>
+<h2>1.0.3</h2>
+<h3>수정</h3>
+<ul>
+<li>Dock과 Finder에서 앱 아이콘 배경이 평면으로 보이던 문제를 고쳤습니다.</li>
+</ul>
+<h2>1.0.2</h2>
+<h3>수정</h3>
+<ul>
+<li>선택 영역을 옮길 때마다 크기가 조금씩 커지던 문제를 고쳤습니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/domus-apps/lantern/releases/download/v1.0.4/Lantern.zip"
+        sparkle:edSignature="1L/1AZ6WdwY3+qjamXCj6kHhAdoJ1Htxrdb2FEZYPMXiC51ZnEVQZ5ECgSyIH/S8udFPA4p8Rgq2+wkALyTWBQ==" length="3128524"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>

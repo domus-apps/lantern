@@ -19,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if TranslocationHealer.healIfNeeded() { return }
 
         TempFiles.sweep()
+        /* The capture bar is all glyphs, so its tooltips are the labels.
+           AppKit's default delay is about a second; a fifth of that reads
+           as feedback rather than as help. App-wide, and only a default, so
+           a user's own NSInitialToolTipDelay still wins. */
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 200])
         setUpMainMenu()
         observePreferenceChanges()
         updateStatusItemVisibility()

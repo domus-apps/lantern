@@ -79,12 +79,18 @@ final class CaptureOverlayController {
         }
     }
 
+    static let fadeInDuration = 0.16
+    static let fadeOutDuration = 0.12
+
     private func build() {
         let mouse = NSEvent.mouseLocation
         for screen in NSScreen.screens {
             let panel = OverlayPanel(screen: screen, controller: self)
             panel.overlayView.selection = savedSelection(for: screen)
             panels.append(panel)
+            /* A plain fade: the panel's own ordering animation would zoom
+               the whole overlay out from the screen's center. */
+            panel.alphaValue = 0
             if screen.frame.contains(mouse) {
                 panel.makeKeyAndOrderFront(nil)
                 panel.overlayView.isHovered = true
@@ -92,6 +98,11 @@ final class CaptureOverlayController {
             } else {
                 panel.orderFrontRegardless()
             }
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.fadeInDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            for panel in panels { panel.animator().alphaValue = 1 }
         }
     }
 
@@ -104,11 +115,21 @@ final class CaptureOverlayController {
             NSEvent.removeMonitor(mouseMonitor)
         }
         mouseMonitor = nil
-        for panel in panels {
-            panel.orderOut(nil)
-            panel.contentView = nil
-        }
+        /* Fade out, then tear down. The panels stop taking input at once;
+           a capture that follows is unaffected because Lantern's windows
+           are excluded from it. */
+        let fading = panels
         panels = []
+        for panel in fading { panel.ignoresMouseEvents = true }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = Self.fadeOutDuration
+            for panel in fading { panel.animator().alphaValue = 0 }
+        }, completionHandler: {
+            for panel in fading {
+                panel.orderOut(nil)
+                panel.contentView = nil
+            }
+        })
         NSCursor.arrow.set()
     }
 
@@ -244,6 +265,7 @@ private final class OverlayPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
+        animationBehavior = .none
         level = CaptureLevels.overlay
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         contentView = overlayView

@@ -45,6 +45,7 @@ final class CaptureToolbarPanel {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.becomesKeyOnlyIfNeeded = true
+        panel.animationBehavior = .none
         panel.level = CaptureLevels.toolbar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
@@ -226,11 +227,25 @@ final class CaptureToolbarPanel {
             x: (visible.midX - size.width / 2).rounded(),
             y: visible.minY + 24 - Self.shadowMargin)
         panel.setFrameOrigin(origin)
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = CaptureOverlayController.fadeInDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
     }
 
     func close() {
-        panel.orderOut(nil)
+        let panel = self.panel
+        panel.ignoresMouseEvents = true
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = CaptureOverlayController.fadeOutDuration
+            panel.animator().alphaValue = 0
+        }, completionHandler: {
+            panel.orderOut(nil)
+            panel.ignoresMouseEvents = false
+        })
     }
 
     var isVisible: Bool { panel.isVisible }

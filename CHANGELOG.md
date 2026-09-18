@@ -4,6 +4,12 @@ All notable changes to Lantern are documented here. The release workflow publish
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 1.0.5
+
+### Fixed
+
+- The Settings window could no longer be dragged after a switch in it was flipped.
+
 ## 1.0.4
 
 ### Changed

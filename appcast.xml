@@ -267,5 +267,86 @@
         sparkle:edSignature="MrQqkmQTincJ2DSHSQR1SQPhgyf+lCVDcFBKiM0MIu8KsJV4AxcCivG5TJAyERrsZTfBq0QJYi6/86Z3MV3wCA==" length="3129718"
         type="application/octet-stream"/>
     </item>
+    <item>
+      <title>Lantern v2.0.0</title>
+      <link>https://github.com/domus-apps/lantern/releases/tag/v2.0.0</link>
+      <pubDate>Mon, 19 Oct 2026 02:28:06 +0000</pubDate>
+      <description xml:lang="en"><![CDATA[
+<h2>2.0.0</h2>
+<p>Lantern now turns videos into GIFs.</p>
+<h3>Added</h3>
+<ul>
+<li>You can drop a video on Lantern's window or its Dock icon to make a GIF.</li>
+<li>You can also copy a video in Finder and paste it into Lantern with ⌘V.</li>
+<li>You can open a new window for the next video with File › New Window (⌘N), even while other videos are open.</li>
+<li>You can also open a video with File › Open Video (⌘O), Open With in Finder, or Services › Make GIF with Lantern.</li>
+<li>A quality slider lets you choose between a smaller file and more detail. Sliding toward Smaller File can bring a GIF under a chat app's upload limit.</li>
+<li>You can choose whether the GIF loops, plays once, or bounces back and forth. A Bounce of a switch turning on also shows it turning back off.</li>
+<li>You can remove the thin line that macOS screen recordings leave around their edges, so the GIF has clean edges.</li>
+<li>You can crop the GIF to the part of the video you need, such as one window in a full-screen recording.</li>
+<li>The editor shows the exact size of the finished GIF each time you change its size, frame rate, playback, quality, trim, or crop. Changing the frame rate from 30 to 15 fps shows how much smaller the GIF gets.</li>
+<li>Copy puts the GIF on the clipboard so you can paste it straight into a chat or a GitHub issue.</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+<li>A 45-second screen recording at half size makes a GIF of around 2.6 MB.</li>
+<li>Lantern opens to a window like a regular app, with no menu bar icon.</li>
+<li>Lantern stays in the Dock after you close its windows, so you can keep dropping videos on its icon.</li>
+<li>GIFs are saved next to their video, and Settings can switch this to the Desktop, another folder, or asking each time.</li>
+</ul>
+<h3>Removed</h3>
+<ul>
+<li>Screen capture, the capture bar, and its shortcut are gone. You can record the screen with the Screenshot app (⌘⇧5) and drop the recording on Lantern.</li>
+<li>MP4 and PNG export are gone.</li>
+<li>Launch at login is gone.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Resized GIFs no longer have faint see-through edges.</li>
+<li>A custom width of four digits or more no longer makes a tiny GIF.</li>
+</ul>      ]]></description>
+      <description xml:lang="ko"><![CDATA[
+<h2>2.0.0</h2>
+<p>Lantern이 비디오를 GIF로 만드는 앱으로 바뀌었습니다.</p>
+<h3>추가</h3>
+<ul>
+<li>Lantern 윈도우나 Dock 아이콘에 비디오를 놓아 GIF로 만들 수 있습니다.</li>
+<li>Finder에서 복사한 비디오를 Lantern에 ⌘V로 붙여 넣을 수도 있습니다.</li>
+<li>다른 비디오를 편집하는 중에도 파일 › 새로운 윈도우(⌘N)로 다음 비디오를 놓을 창을 열 수 있습니다.</li>
+<li>파일 › 비디오 열기(⌘O), Finder의 다음으로 열기, 서비스 › Lantern으로 GIF 만들기로도 비디오를 열 수 있습니다.</li>
+<li>품질 슬라이더로 작은 파일과 선명한 화질 사이에서 원하는 정도를 고를 수 있습니다. 작은 파일 쪽으로 옮겨 메신저 업로드 용량에 맞출 수 있습니다.</li>
+<li>GIF를 계속 반복할지, 한 번만 재생할지, 앞뒤로 오가며 반복할지(바운스) 고를 수 있습니다. 스위치가 켜지는 영상을 바운스로 만들면 다시 꺼지는 모습까지 이어집니다.</li>
+<li>macOS 화면 녹화의 가장자리에 함께 녹화되는 얇은 선을 없애 GIF의 가장자리를 깔끔하게 만들 수 있습니다.</li>
+<li>필요한 부분만 잘라 내어 전체 화면 녹화에서 창 하나만 GIF로 만들 수 있습니다.</li>
+<li>크기, 프레임 속도, 재생 방식, 품질, 다듬기, 자르기를 바꿀 때마다 완성될 GIF의 정확한 파일 크기가 표시됩니다. 프레임 속도를 30fps에서 15fps로 바꾸면 GIF가 얼마나 작아지는지 보입니다.</li>
+<li>복사한 GIF를 메신저나 GitHub 이슈에 바로 붙여 넣을 수 있습니다.</li>
+</ul>
+<h3>변경</h3>
+<ul>
+<li>45초짜리 화면 녹화를 절반 크기로 만들면 2.6MB 정도의 GIF가 됩니다.</li>
+<li>Lantern을 열면 일반 앱처럼 윈도우가 나타나며, 메뉴 막대 아이콘은 없습니다.</li>
+<li>윈도우를 닫아도 Lantern이 Dock에 남아 있어 아이콘에 비디오를 계속 놓을 수 있습니다.</li>
+<li>GIF는 비디오와 같은 폴더에 저장되며, 설정에서 데스크탑, 다른 폴더, 매번 묻기 중에서 고를 수 있습니다.</li>
+</ul>
+<h3>제거</h3>
+<ul>
+<li>화면 캡처 기능과 캡처 막대, 단축키가 빠졌습니다. 화면은 스크린샷 앱(⌘⇧5)으로 녹화하고 그 파일을 Lantern에 놓으면 GIF로 만들 수 있습니다.</li>
+<li>MP4와 PNG 내보내기가 빠졌습니다.</li>
+<li>로그인 시 실행 옵션이 빠졌습니다.</li>
+</ul>
+<h3>수정</h3>
+<ul>
+<li>크기를 줄인 GIF의 가장자리가 희미하게 비쳐 보이던 문제를 수정했습니다.</li>
+<li>너비를 네 자리 이상으로 직접 입력하면 GIF가 아주 작게 만들어지던 문제를 수정했습니다.</li>
+</ul>      ]]></description>
+      <sparkle:version>10</sparkle:version>
+      <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>8</sparkle:minimumAutoupdateVersion>
+      <enclosure
+        url="https://github.com/domus-apps/lantern/releases/download/v2.0.0/Lantern.zip"
+        sparkle:edSignature="rFPSgakYjIZC3KbrM0lXwY++TIk8Et4PS9/h3By+fP2pj1n9dYaiv3o8Dcp8UP/drai43+hn9SlLfUP7Uk6qDw==" length="3160893"
+        type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>

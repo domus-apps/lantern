@@ -7,7 +7,7 @@ import CoreMedia
    it does, so "nearest" would show a frame before it existed). Consecutive
    ticks showing the same frame merge into one run, which is what the
    encoders want: one sample held for a while, not duplicates. */
-struct FrameRun: Equatable {
+struct FrameRun: Equatable, Sendable {
     /// Index into the sorted source frame list.
     let sourceIndex: Int
     /// First output tick (in 1/fps units, counted from the trim start).

@@ -1,43 +1,49 @@
 import Foundation
+import LanternGIF
 
 /* App-level preferences. Same UserDefaults caveat as the rest of the suite:
    `swift run` and the bundled app use different defaults domains. Every
-   setter posts `changed`, which the status item, the hotkey registration,
-   and the Settings model all listen to. */
+   setter posts `changed`, which the Settings model listens to. */
 enum AppPreferences {
     static let changed = Notification.Name("Lantern.PreferencesChanged")
 
     private static let defaults = UserDefaults.standard
-    private static let hideMenuBarIconKey = "pref.hideMenuBarIcon"
-    private static let showsCursorKey = "pref.showsCursor"
-    private static let saveLocationKey = "pref.saveLocation"
+    private static let saveLocationKey = "pref.gifSaveLocation"
     private static let saveFolderKey = "pref.saveFolder"
-    private static let captureModeKey = "pref.captureMode"
-    private static let timerSecondsKey = "pref.timerSeconds"
-    private static let shortcutKey = "pref.shortcut"
-    private static let exportScaleKey = "pref.exportScale"
-    private static let exportFPSKey = "pref.exportFPS"
-    private static let videoFormatKey = "pref.videoFormat"
+    private static let exportScaleKey = "pref.gifScale"
+    private static let exportFPSKey = "pref.gifFPS"
+    private static let qualityKey = "pref.gifQuality"
+    private static let playbackKey = "pref.gifPlayback"
+    private static let removesBorderKey = "pref.removeRecordingBorder"
 
-    static var isMenuBarIconHidden: Bool {
-        get { defaults.bool(forKey: hideMenuBarIconKey) }
-        set { set(newValue, forKey: hideMenuBarIconKey) }
+    /* Keys only 1.x (the screen capture app) wrote. A Mac with any of them
+       updated from 1.x and gets the intro to 2.0 once, after which they go.
+       pref.saveFolder is shared with 2.0 and stays. */
+    private static let captureAppKeys = [
+        "onboarding.completed", "pref.hideMenuBarIcon", "pref.showsCursor", "pref.saveLocation",
+        "pref.captureMode", "pref.timerSeconds", "pref.shortcut", "pref.exportScale", "pref.exportFPS",
+        "pref.videoFormat",
+    ]
+
+    static var cameFromCaptureApp: Bool {
+        captureAppKeys.contains { defaults.object(forKey: $0) != nil }
     }
 
-    /* On by default, like the system tool's "Show Mouse Pointer". */
-    static var showsCursor: Bool {
-        get { defaults.object(forKey: showsCursorKey) as? Bool ?? true }
-        set { set(newValue, forKey: showsCursorKey) }
+    static func retireCaptureAppSettings() {
+        for key in captureAppKeys { defaults.removeObject(forKey: key) }
     }
 
-    /* Where exports land. `.folder` without a readable path falls back to
-       the Desktop, so a moved folder never makes Save fail silently. */
+    /* Where GIFs land. Next to the video by default: that's the folder the
+       user just dragged it from. `.folder` without a writable path, or a
+       video in a folder Lantern can't write to, falls back to the Desktop,
+       so Save never fails silently. (A new key: 1.x stored "desktop" as the
+       default for screen captures.) */
     enum SaveLocation: String, CaseIterable {
-        case desktop, folder, ask
+        case source, desktop, folder, ask
     }
 
     static var saveLocation: SaveLocation {
-        get { SaveLocation(rawValue: defaults.string(forKey: saveLocationKey) ?? "") ?? .desktop }
+        get { SaveLocation(rawValue: defaults.string(forKey: saveLocationKey) ?? "") ?? .source }
         set { set(newValue.rawValue, forKey: saveLocationKey) }
     }
 
@@ -52,54 +58,47 @@ enum AppPreferences {
     }
 
     /// The directory Save writes to without asking; nil means "ask".
-    static var resolvedSaveDirectory: URL? {
+    static func resolvedSaveDirectory(forVideoAt video: URL) -> URL? {
+        let writable = { (url: URL) in FileManager.default.isWritableFile(atPath: url.path) }
         switch saveLocation {
-        case .desktop: return desktopDirectory
         case .ask: return nil
+        case .desktop: return desktopDirectory
+        case .source:
+            let folder = video.deletingLastPathComponent()
+            return writable(folder) ? folder : desktopDirectory
         case .folder:
-            if let folder = saveFolder, FileManager.default.isWritableFile(atPath: folder.path) {
-                return folder
-            }
+            if let folder = saveFolder, writable(folder) { return folder }
             return desktopDirectory
         }
     }
 
-    /* The toolbar's selected mode, remembered like the system tool does. */
-    static var captureMode: CaptureMode {
-        get { CaptureMode(stored: defaults.string(forKey: captureModeKey) ?? "") ?? .init(kind: .image, scope: .area) }
-        set { set(newValue.stored, forKey: captureModeKey) }
-    }
-
-    /* 0 means no delay. */
-    static var timerSeconds: Int {
-        get { defaults.integer(forKey: timerSecondsKey) }
-        set { set(newValue, forKey: timerSecondsKey) }
-    }
-
-    static var shortcut: ShortcutSpec {
-        get {
-            guard let data = defaults.data(forKey: shortcutKey),
-                let spec = try? JSONDecoder().decode(ShortcutSpec.self, from: data)
-            else { return .defaultCapture }
-            return spec
-        }
-        set { set(try? JSONEncoder().encode(newValue), forKey: shortcutKey) }
-    }
-
-    /* Editor defaults: the last-used size and frame rate come back next time. */
+    /* Editor defaults: the last-used size, frame rate, quality and playback
+       come back next time. Half size by default, which is point size for a
+       Retina screen recording. */
     static var exportScalePercent: Int {
-        get { defaults.object(forKey: exportScaleKey) as? Int ?? 100 }
+        get { defaults.object(forKey: exportScaleKey) as? Int ?? 50 }
         set { set(newValue, forKey: exportScaleKey) }
     }
 
     static var exportFPS: Int {
-        get { defaults.object(forKey: exportFPSKey) as? Int ?? 60 }
+        get { defaults.object(forKey: exportFPSKey) as? Int ?? 15 }
         set { set(newValue, forKey: exportFPSKey) }
     }
 
-    static var videoFormat: ExportFormat {
-        get { ExportFormat(rawValue: defaults.string(forKey: videoFormatKey) ?? "") ?? .mp4 }
-        set { set(newValue.rawValue, forKey: videoFormatKey) }
+    static var quality: Int {
+        get { defaults.object(forKey: qualityKey) as? Int ?? GIFEncoderOptions.defaultQuality }
+        set { set(newValue, forKey: qualityKey) }
+    }
+
+    static var playback: Playback {
+        get { Playback(rawValue: defaults.string(forKey: playbackKey) ?? "") ?? .loop }
+        set { set(newValue.rawValue, forKey: playbackKey) }
+    }
+
+    /// Off until the user turns it on (it changes the picture).
+    static var removesRecordingBorder: Bool {
+        get { defaults.bool(forKey: removesBorderKey) }
+        set { set(newValue, forKey: removesBorderKey) }
     }
 
     private static func set(_ value: Any?, forKey key: String) {

@@ -11,19 +11,18 @@ import Testing
 
 @Test func thirtyFPSDelaysAlternateThreeAndFourCentiseconds() {
     let runs = (0..<30).map { FrameRun(sourceIndex: $0, firstTick: $0, tickCount: 1) }
-    let delays = GIFTiming.delays(for: runs, fps: 30)
-    #expect(delays.prefix(3) == [0.03, 0.04, 0.03])
+    let delays = GIFTiming.centiseconds(for: runs, fps: 30)
+    #expect(delays.prefix(3) == [3, 4, 3])
     // One second of frames adds up to exactly one second.
-    #expect(abs(delays.reduce(0, +) - 1.0) < 1e-9)
+    #expect(delays.reduce(0, +) == 100)
 }
 
 @Test func longRunsBecomeOneLongDelay() {
     let runs = [FrameRun(sourceIndex: 0, firstTick: 0, tickCount: 45), FrameRun(sourceIndex: 1, firstTick: 45, tickCount: 15)]
-    let delays = GIFTiming.delays(for: runs, fps: 15)
-    #expect(delays == [3.0, 1.0])
+    #expect(GIFTiming.centiseconds(for: runs, fps: 15) == [300, 100])
 }
 
 @Test func delaysNeverDropBelowTwoCentiseconds() {
     let runs = [FrameRun(sourceIndex: 0, firstTick: 0, tickCount: 1)]
-    #expect(GIFTiming.delays(for: runs, fps: 100) == [0.02])
+    #expect(GIFTiming.centiseconds(for: runs, fps: 100) == [2])
 }

@@ -5,7 +5,7 @@ let app = NSApplication.shared
    entry point does run on the main thread. */
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
-/* Menu bar only — no Dock icon. The bundled build also sets LSUIElement,
-   but this makes plain `swift run` behave the same way. */
-app.setActivationPolicy(.accessory)
+/* A regular Dock app; set explicitly so a bare `swift run` binary gets a
+   menu bar and Dock icon too. */
+app.setActivationPolicy(.regular)
 app.run()

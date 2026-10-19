@@ -10,14 +10,30 @@ let package = Package(
        from the deployment target, so the target must be >= 26 for the app
        to get the native current-OS appearance. */
     platforms: [.macOS("26.0")],
+    products: [
+        .executable(name: "Lantern", targets: ["Lantern"]),
+        /* The GIF encoder on its own, so benchmarks can link it. */
+        .library(name: "LanternGIF", targets: ["LanternGIF"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.6")
     ],
     targets: [
+        .target(
+            name: "LanternGIF",
+            path: "Sources/LanternGIF",
+            /* Optimized in debug builds too. The encoder is per-pixel loops
+               (palette search, dithering, LZW) that run 6–50× slower
+               unoptimized: an 8 s clip took 13 s instead of 2 s, so `swift
+               run` and dev.sh misrepresented the app's speed. Release
+               builds are -O already. */
+            swiftSettings: [.unsafeFlags(["-O"], .when(configuration: .debug))]
+        ),
         .executableTarget(
             name: "Lantern",
             dependencies: [
-                .product(name: "Sparkle", package: "Sparkle")
+                "LanternGIF",
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/Lantern",
             linkerSettings: [
@@ -36,7 +52,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LanternTests",
-            dependencies: ["Lantern"],
+            dependencies: ["Lantern", "LanternGIF"],
             path: "Tests/LanternTests"
         )
     ]

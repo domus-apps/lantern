@@ -15,13 +15,13 @@ enum GIFTiming {
         allowedFPS.first { $0 <= fps } ?? allowedFPS.last!
     }
 
-    /// Per-run delays in seconds for a plan at `fps`.
-    static func delays(for runs: [FrameRun], fps: Int) -> [Double] {
+    /// Per-run delays in centiseconds for a plan at `fps`.
+    static func centiseconds(for runs: [FrameRun], fps: Int) -> [Int] {
         runs.map { run in
             let start = Double(run.firstTick) / Double(fps)
             let end = Double(run.firstTick + run.tickCount) / Double(fps)
-            let centiseconds = (end * 100).rounded() - (start * 100).rounded()
-            return max(centiseconds, 2) / 100
+            let centiseconds = Int((end * 100).rounded() - (start * 100).rounded())
+            return max(centiseconds, 2)
         }
     }
 }

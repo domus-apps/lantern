@@ -17,6 +17,10 @@ cp Scripts/Info.plist "$APP/Contents/Info.plist"
 # trusted across toolchains).
 cp -R .build/release/Lantern_Lantern.bundle "$APP/Contents/Resources/"
 
+# The Services menu title is looked up in the app's own lproj folders, not
+# the resource bundle.
+cp -R Scripts/Services/ko.lproj "$APP/Contents/Resources/"
+
 # Embed Sparkle.framework (auto-update). The binary references it via
 # @rpath/../Frameworks (see Package.swift linkerSettings).
 SPARKLE=$(find .build/artifacts -type d -name Sparkle.framework -path "*macos*" | head -1)
@@ -46,8 +50,7 @@ fi
 
 # With CODESIGN_IDENTITY set (e.g. "Developer ID Application"), produce a
 # distributable, notarization-ready signature (hardened runtime + timestamp).
-# Otherwise fall back to ad-hoc. Screen Recording (TCC) is granted per
-# signature, so test the permission flow with the Developer ID build.
+# Otherwise fall back to ad-hoc.
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
     SIGN=(codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY")
 else

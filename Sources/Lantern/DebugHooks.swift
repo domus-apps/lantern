@@ -1,143 +1,148 @@
 import AppKit
-import AVFoundation
 import CoreMedia
+import LanternGIF
 
 /* Scripted checks for the parts that otherwise need a hand on the mouse.
-   Every hook writes only to the path it is given and quits when done, so a
-   test run never touches the Desktop or the real preferences beyond what
-   any launch does.
+   Every hook writes only to the path it is given.
 
-   --debug-still <png-path>              captures the main display
-   --debug-still-window <png-path>       captures the frontmost window (with its shadow)
-   --debug-editor                        captures the main display and opens the editor on it
-   --debug-record-ui                     starts an area recording through the normal path and leaves it running
-   --debug-record <seconds> <mp4-path>   records the main display, then copies the file
-   --debug-export <mp4> <out> <fps> <percent>   re-encodes an MP4 to .mp4 or .gif (by extension) */
+   --debug-export <video> <out.gif> <fps> <percent> <quality>[,<quality>…] [<start> <end>]
+       encodes through the app's exporter (optionally trimmed to seconds
+       start…end), prints time and size, quits. Several qualities encode
+       one after another sharing a frame cache, as the editor does when the
+       slider moves; each overwrites the output. `--playback loop|once|bounce`
+       anywhere on the line sets how the GIF plays, and `--remove-border`
+       cuts a recording border found by RecordingBorder.
+   --debug-border <video>…
+       prints the recording border found in each video, quits.
+   --debug-open <video> [--crop <top>,<left>,<bottom>,<right>] [--crop-mode] [--crop-drag <x1>,<y1>,<x2>,<y2>]…
+       opens the editor on a video through the normal path and keeps
+       running, optionally with a crop already made (pixels off each side
+       of the upright picture) and with crop mode open. Each --crop-drag
+       is a left-button drag in window points from the top left, sent to
+       the window from inside the app so the real pointer stays put (mouse
+       events posted to the process from outside never reach its windows),
+       and the crop is printed after each */
 enum DebugHooks {
+    /// A crop the next editor starts with (--debug-open … --crop).
+    @MainActor static var editorCrop: PixelInsets?
+    /// Whether the next editor opens crop mode (--debug-open … --crop-mode).
+    @MainActor static var opensCropMode = false
+    /// Drags to make in crop mode (--debug-open … --crop-drag).
+    @MainActor static var cropDrags: [(CGPoint, CGPoint)] = []
+
+    /// Sends each drag to the window as AppKit would deliver a real one.
+    @MainActor static func performCropDrags(in window: NSWindow, report: @escaping () -> String) {
+        var delay = 0.3
+        for (from, to) in cropDrags {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                let height = window.frame.height
+                func send(_ type: NSEvent.EventType, _ point: CGPoint) {
+                    guard
+                        let event = NSEvent.mouseEvent(
+                            with: type, location: NSPoint(x: point.x, y: height - point.y), modifierFlags: [],
+                            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                            context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+                    else { return }
+                    window.sendEvent(event)
+                }
+                send(.leftMouseDown, from)
+                for step in 1...10 {
+                    let t = CGFloat(step) / 10
+                    send(.leftMouseDragged, CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t))
+                }
+                send(.leftMouseUp, to)
+                print("crop-drag \(from) → \(to): \(report())")
+                fflush(stdout)
+            }
+            delay += 0.3
+        }
+    }
+
     @MainActor
-    static func run(arguments: [String], coordinator: CaptureCoordinator) -> Bool {
-        if let index = arguments.firstIndex(of: "--debug-still"), arguments.count > index + 1 {
-            let path = arguments[index + 1]
-            Task { @MainActor in
-                await still(to: URL(fileURLWithPath: path))
-                NSApp.terminate(nil)
-            }
-            return true
-        }
-        if let index = arguments.firstIndex(of: "--debug-still-window"), arguments.count > index + 1 {
-            let path = arguments[index + 1]
-            Task { @MainActor in
-                await stillWindow(to: URL(fileURLWithPath: path))
-                NSApp.terminate(nil)
-            }
-            return true
-        }
-        if arguments.contains("--debug-editor") {
-            Task { @MainActor in
-                do {
-                    let snapshot = try await ShareableSnapshot.fetch()
-                    guard let display = snapshot.displays.first else { return }
-                    let image = try await StillCapturer.capture(.display(display), snapshot: snapshot, showsCursor: false)
-                    coordinator.openEditorForDebugging(.image(image))
-                } catch {
-                    print("debug-editor: FAILED \(error)")
-                }
-            }
-            return true
-        }
-        if arguments.contains("--debug-record-ui") {
-            Task { @MainActor in
-                if let snapshot = try? await ShareableSnapshot.fetch() {
-                    coordinator.startRecordingForDebugging(snapshot: snapshot)
-                }
-            }
-            return false  // the app keeps running normally: status item, editor
-        }
-        if let index = arguments.firstIndex(of: "--debug-record"), arguments.count > index + 2,
-            let seconds = Double(arguments[index + 1])
-        {
-            let path = arguments[index + 2]
-            Task { @MainActor in
-                await record(seconds: seconds, to: URL(fileURLWithPath: path))
-                NSApp.terminate(nil)
-            }
-            return true
-        }
-        if let index = arguments.firstIndex(of: "--debug-export"), arguments.count > index + 4,
+    static func run(arguments: [String], delegate: AppDelegate) -> Bool {
+        if let index = arguments.firstIndex(of: "--debug-export"), arguments.count > index + 5,
             let fps = Int(arguments[index + 3]), let percent = Int(arguments[index + 4])
         {
-            let source = URL(fileURLWithPath: arguments[index + 1])
+            let qualities = arguments[index + 5].split(separator: ",").compactMap { Int($0) }
+            let video = URL(fileURLWithPath: arguments[index + 1])
             let output = URL(fileURLWithPath: arguments[index + 2])
             Task { @MainActor in
-                await export(source: source, to: output, fps: fps, percent: percent)
+                do {
+                    let source = try await SourceVideo.load(video)
+                    var trim: CMTimeRange?
+                    if arguments.count > index + 7, let start = Double(arguments[index + 6]),
+                        let end = Double(arguments[index + 7])
+                    {
+                        trim = CMTimeRange(
+                            start: CMTime(seconds: start, preferredTimescale: 600),
+                            end: CMTime(seconds: end, preferredTimescale: 600))
+                    }
+                    var playback = Playback.loop
+                    if let flag = arguments.firstIndex(of: "--playback"), arguments.count > flag + 1 {
+                        playback = Playback(rawValue: arguments[flag + 1]) ?? .loop
+                    }
+                    var crop = PixelInsets.zero
+                    if arguments.contains("--remove-border") {
+                        crop = await RecordingBorder.detect(in: source) ?? .zero
+                    }
+                    let cache = FrameCache()
+                    for quality in qualities {
+                        let started = Date()
+                        let settings = ExportSettings(
+                            scale: .percent(percent), fps: fps, quality: quality, trim: trim, playback: playback,
+                            crop: crop)
+                        try await GIFExporter.export(
+                            source, settings: settings, to: output, job: ExportJob(), cache: cache) { _ in }
+                        let bytes = (try? FileManager.default.attributesOfItem(atPath: output.path)[.size] as? Int) ?? 0
+                        print(
+                            String(
+                                format: "debug-export: %@ %.0fx%.0f q%d %@ → %d bytes in %.2fs", output.lastPathComponent,
+                                settings.outputSize(of: source).width,
+                                settings.outputSize(of: source).height, quality, playback.rawValue, bytes,
+                                Date().timeIntervalSince(started)))
+                    }
+                } catch {
+                    print("debug-export: FAILED \(error)")
+                }
                 NSApp.terminate(nil)
             }
+            return true
+        }
+        if let index = arguments.firstIndex(of: "--debug-border") {
+            let videos = arguments[(index + 1)...].prefix { !$0.hasPrefix("--") }
+            Task { @MainActor in
+                for path in videos {
+                    let started = Date()
+                    guard let source = try? await SourceVideo.load(URL(fileURLWithPath: path)) else {
+                        print("debug-border: unreadable \(path)")
+                        continue
+                    }
+                    let found = await RecordingBorder.detect(in: source)
+                    print(
+                        String(
+                            format: "debug-border: t%d l%d b%d r%d in %.2fs  %@", found?.top ?? -1, found?.left ?? -1,
+                            found?.bottom ?? -1, found?.right ?? -1, Date().timeIntervalSince(started),
+                            URL(fileURLWithPath: path).lastPathComponent))
+                }
+                NSApp.terminate(nil)
+            }
+            return true
+        }
+        if let index = arguments.firstIndex(of: "--debug-open"), arguments.count > index + 1 {
+            if let flag = arguments.firstIndex(of: "--crop"), arguments.count > flag + 1 {
+                let sides = arguments[flag + 1].split(separator: ",").compactMap { Int($0) }
+                if sides.count == 4 {
+                    editorCrop = PixelInsets(top: sides[0], left: sides[1], bottom: sides[2], right: sides[3])
+                }
+            }
+            opensCropMode = arguments.contains("--crop-mode")
+            for (flag, value) in zip(arguments, arguments.dropFirst()) where flag == "--crop-drag" {
+                let n = value.split(separator: ",").compactMap { Double($0) }
+                if n.count == 4 { cropDrags.append((CGPoint(x: n[0], y: n[1]), CGPoint(x: n[2], y: n[3]))) }
+            }
+            delegate.open([URL(fileURLWithPath: arguments[index + 1])])
             return true
         }
         return false
-    }
-
-    @MainActor
-    private static func still(to url: URL) async {
-        do {
-            let snapshot = try await ShareableSnapshot.fetch()
-            guard let display = snapshot.displays.first else { throw ExportError.noVideoTrack }
-            let image = try await StillCapturer.capture(.display(display), snapshot: snapshot, showsCursor: false)
-            try PNGWriter.write(image.cgImage, scale: image.scale, to: url)
-            print("debug-still: \(Int(image.pixelSize.width))x\(Int(image.pixelSize.height)) @\(image.scale)x -> \(url.path)")
-        } catch {
-            print("debug-still: FAILED \(error)")
-        }
-    }
-
-    @MainActor
-    private static func stillWindow(to url: URL) async {
-        do {
-            let snapshot = try await ShareableSnapshot.fetch()
-            guard let window = snapshot.windows.first else { throw ExportError.noVideoTrack }
-            let image = try await StillCapturer.capture(.window(window), snapshot: snapshot, showsCursor: false)
-            try PNGWriter.write(image.cgImage, scale: image.scale, to: url)
-            print("debug-still-window: \(window.owningApplication?.applicationName ?? "?") frame \(NSStringFromRect(window.frame)) -> \(Int(image.pixelSize.width))x\(Int(image.pixelSize.height)) @\(image.scale)x \(url.path)")
-        } catch {
-            print("debug-still-window: FAILED \(error)")
-        }
-    }
-
-    @MainActor
-    private static func record(seconds: Double, to url: URL) async {
-        do {
-            let snapshot = try await ShareableSnapshot.fetch()
-            guard let display = snapshot.displays.first else { throw ExportError.noVideoTrack }
-            let recorder = try ScreenRecorder(target: .display(display), snapshot: snapshot, showsCursor: true)
-            try await recorder.start()
-            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            let video = try await recorder.stop()
-            try? FileManager.default.removeItem(at: url)
-            try FileManager.default.copyItem(at: video.url, to: url)
-            print("debug-record: \(Int(video.pixelSize.width))x\(Int(video.pixelSize.height)) \(video.duration.seconds)s -> \(url.path)")
-        } catch {
-            print("debug-record: FAILED \(error)")
-        }
-    }
-
-    @MainActor
-    private static func export(source: URL, to url: URL, fps: Int, percent: Int) async {
-        do {
-            let asset = AVURLAsset(url: source)
-            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
-                throw ExportError.noVideoTrack
-            }
-            let size = try await track.load(.naturalSize)
-            let duration = try await asset.load(.duration)
-            let video = RecordedVideo(url: source, pixelSize: size, duration: duration)
-            let format: ExportFormat = url.pathExtension.lowercased() == "gif" ? .gif : .mp4
-            let settings = ExportSettings(format: format, scale: .percent(percent), fps: fps, trim: nil)
-            let started = Date()
-            try await MediaExporter.export(.video(video), settings: settings, to: url, job: ExportJob()) { _ in }
-            let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-            print("debug-export: \(format.rawValue) \(bytes) bytes in \(String(format: "%.1f", Date().timeIntervalSince(started)))s -> \(url.path)")
-        } catch {
-            print("debug-export: FAILED \(error)")
-        }
     }
 }

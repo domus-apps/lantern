@@ -351,7 +351,7 @@ func drawSparkles(_ cg: CGContext, _ sparkles: [(x: CGFloat, y: CGFloat, r: CGFl
 
 let pillLabelColor = NSColor(srgbRed: 0.99, green: 0.88, blue: 0.88, alpha: 1)
 let taglineColor = NSColor(srgbRed: 0.98, green: 0.80, blue: 0.80, alpha: 1)
-let tagline = "Screenshots, recordings, and GIFs"
+let tagline = "Turn any video into a GIF"
 
 func pillText(_ label: String, fontSize: CGFloat) -> NSAttributedString {
     NSAttributedString(string: label, attributes: [
@@ -389,7 +389,7 @@ func drawPill(
     return pill.maxX
 }
 
-let pillLabels = ["Image or video", "Any size, any frame rate", "MP4 or GIF"]
+let pillLabels = ["Trim and resize", "Up to 30 fps", "Small, sharp files"]
 
 // MARK: - Banner (1800 x 600)
 

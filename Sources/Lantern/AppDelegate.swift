@@ -1,17 +1,20 @@
 import AppKit
-import CoreMedia
+import ServiceManagement
+import UniformTypeIdentifiers
 
+/* A regular windowed app: it opens to the home window (where videos go),
+   each video gets its own editor, and the home window comes back when the
+   last editor closes. It keeps running with no windows, like Preview: the
+   Dock icon still takes dropped videos, and clicking it brings the home
+   window back. */
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let updater = UpdaterController()
-    private let hotKeys = HotKeyCenter()
-    private let coordinator = CaptureCoordinator()
-    private var statusItem: NSStatusItem?
-    private var statusMenu: NSMenu?
     private var settingsWindowController: SettingsWindowController?
-    private var onboardingController: OnboardingWindowController?
-
-    private static let onboardingCompletedKey = "onboarding.completed"
+    private var homeWindowController: HomeWindowController?
+    private var introWindowController: IntroWindowController?
+    private var editors: [EditorWindowController] = []
+    private var openedFilesAtLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         /* A translocated launch relaunches itself from the real bundle —
@@ -19,45 +22,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if TranslocationHealer.healIfNeeded() { return }
 
         TempFiles.sweep()
-        /* The capture bar is all glyphs, so its tooltips are the labels.
-           AppKit's default delay is about a second; a fifth of that reads
-           as feedback rather than as help. App-wide, and only a default, so
-           a user's own NSInitialToolTipDelay still wins. */
-        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 200])
         setUpMainMenu()
-        observePreferenceChanges()
-        updateStatusItemVisibility()
-        registerShortcut()
+        retireLoginItem()
+        /* Finder's Services menu (Make GIF with Lantern) calls makeGIF. */
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
 
-        coordinator.onStateChange = { [weak self] _ in self?.updateStatusIcon() }
-        coordinator.onRecordingTick = { [weak self] elapsed in self?.showElapsed(elapsed) }
-        coordinator.onEditorsChange = { [weak self] _ in
-            /* The closing editor is still visible inside willClose; decide
-               on the next runloop turn. */
-            DispatchQueue.main.async {
-                self?.updateActivationPolicy()
-                self?.handBackActivationIfWindowless()
-            }
-        }
-
-        if DebugHooks.run(arguments: CommandLine.arguments, coordinator: coordinator) {
+        if DebugHooks.run(arguments: CommandLine.arguments, delegate: self) {
             return
         }
 
-        /* Completion is only recorded when onboarding is finished properly,
-           so an interrupted (or force-quit) run shows it again. The gate also
-           returns whenever the permission is missing at launch. */
-        if !UserDefaults.standard.bool(forKey: Self.onboardingCompletedKey)
-            || !PermissionGate.grantedAtLaunch
-            || CommandLine.arguments.contains("--onboarding")
-        {
-            showOnboarding()
+        /* A launch that came with files (Open With, a drop on the Dock icon)
+           just opens them; otherwise show where videos go, or first, once
+           after the update from 1.x, what Lantern does now. */
+        if !openedFilesAtLaunch {
+            if AppPreferences.cameFromCaptureApp {
+                showIntro()
+            } else {
+                showHome()
+            }
         }
         if CommandLine.arguments.contains("--settings") {
             openSettings()
-        }
-        if CommandLine.arguments.contains("--capture") {
-            coordinator.begin()
         }
     }
 
@@ -65,189 +51,176 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TempFiles.sweep()
     }
 
-    private func showOnboarding() {
-        if onboardingController == nil {
-            onboardingController = OnboardingWindowController { [weak self] in
-                UserDefaults.standard.set(true, forKey: Self.onboardingCompletedKey)
-                self?.onboardingController = nil
-            }
-            observeClose(of: onboardingController?.window)
-        }
-        comeForward()
-        onboardingController?.window?.makeKeyAndOrderFront(nil)
+    /* Open With, a drop on the Dock or Finder icon, `open -a Lantern x.mov`.
+       At launch this arrives before applicationDidFinishLaunching. */
+    func application(_ application: NSApplication, open urls: [URL]) {
+        openedFilesAtLaunch = true
+        open(urls)
     }
 
-    /* Launching the app again while it's already running sends "reopen" to
-       the live instance. With the menu bar icon hidden this is the only way
-       back into the UI, so surface Settings (which also puts the app in the
-       Dock via updateActivationPolicy). */
+    /* A Dock click with nothing on screen: bring back a minimized window
+       (AppKit's default, hence true) or else the home window. */
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        if AppPreferences.isMenuBarIconHidden {
-            openSettings()
+        if hasVisibleWindows || NSApp.windows.contains(where: \.isMiniaturized) {
+            return true
         }
+        showHome()
         return false
     }
 
-    // MARK: - Shortcut
-
-    private func registerShortcut() {
-        hotKeys.unregisterAll()
-        let spec = AppPreferences.shortcut
-        hotKeys.register(keyCode: spec.keyCode, modifiers: spec.carbonModifiers) { [weak self] in
-            self?.coordinator.toggle()
-        }
-        if let item = statusMenu?.item(withTag: Self.captureItemTag) {
-            applyKeyEquivalent(spec, to: item)
-        }
+    /* 1.x was a menu bar app with a Launch at Login switch. A windowed
+       converter has no reason to start at login (it would greet every login
+       with its window), so take the registration back once. */
+    private func retireLoginItem() {
+        guard Bundle.main.bundleIdentifier != nil, SMAppService.mainApp.status == .enabled else { return }
+        try? SMAppService.mainApp.unregister()
     }
 
-    private func applyKeyEquivalent(_ spec: ShortcutSpec, to item: NSMenuItem) {
-        if let equivalent = spec.menuKeyEquivalent {
-            item.keyEquivalent = equivalent.key
-            item.keyEquivalentModifierMask = equivalent.mask
-        } else {
-            item.keyEquivalent = ""
-        }
-    }
+    // MARK: - Opening videos
 
-    // MARK: - Status item
-
-    private static let captureItemTag = 1
-
-    private func updateStatusItemVisibility() {
-        if AppPreferences.isMenuBarIconHidden {
-            if let statusItem {
-                NSStatusBar.system.removeStatusItem(statusItem)
+    func open(_ urls: [URL]) {
+        for url in urls {
+            if let editor = editors.first(where: { $0.video.url.standardizedFileURL == url.standardizedFileURL }) {
+                editor.present()
+                continue
             }
-            statusItem = nil
-            statusMenu = nil
-        } else if statusItem == nil {
-            setUpStatusItem()
-        }
-        updateActivationPolicy()
-    }
-
-    private func setUpStatusItem() {
-        /* A fixed length instead of squareLength: square items are as wide
-           as the menu bar is tall, which pads a ~18pt symbol with a lot of
-           dead space. 20pt hugs the icon while keeping its natural size —
-           the same width every Domus app uses. */
-        let item = NSStatusBar.system.statusItem(withLength: 20)
-        item.button?.target = self
-        item.button?.action = #selector(statusItemClicked)
-
-        let menu = NSMenu()
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
-        let about = NSMenuItem(title: "Lantern \(version)", action: nil, keyEquivalent: "")
-        about.isEnabled = false
-        menu.addItem(about)
-        menu.addItem(.separator())
-        let capture = NSMenuItem(title: L("Capture…"), action: #selector(beginCapture), keyEquivalent: "")
-        capture.target = self
-        capture.tag = Self.captureItemTag
-        applyKeyEquivalent(AppPreferences.shortcut, to: capture)
-        menu.addItem(capture)
-        menu.addItem(.separator())
-        let onboardingItem = NSMenuItem(
-            title: L("Show Welcome Guide…"), action: #selector(reopenOnboarding), keyEquivalent: "")
-        onboardingItem.target = self
-        menu.addItem(onboardingItem)
-        let settings = NSMenuItem(title: L("Settings…"), action: #selector(openSettingsAction), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        menu.addItem(updater.makeMenuItem())
-        /* Remote-debugging aid: one click copies the permission state and
-           what ScreenCaptureKit can see, for pasting back. */
-        let diagnostics = NSMenuItem(title: L("Copy Diagnostics"), action: #selector(copyDiagnostics), keyEquivalent: "")
-        diagnostics.target = self
-        menu.addItem(diagnostics)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(
-            title: L("Quit Lantern"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        statusMenu = menu
-        item.menu = menu
-        statusItem = item
-        updateStatusIcon()
-    }
-
-    /* Idle: the lantern, with the menu. Recording: a stop button with the
-       elapsed time, and a single click stops (the system tool works the same
-       way). Countdown: the seconds left. */
-    private func updateStatusIcon() {
-        guard let statusItem, let button = statusItem.button else { return }
-        switch coordinator.state {
-        case .idle, .picking:
-            button.image = MenuBarIcon.lantern()
-            button.contentTintColor = nil
-            button.title = ""
-            /* imageOnly, or the empty title still reserves room and pushes
-               the glyph off center in the 20pt item. */
-            button.imagePosition = .imageOnly
-            statusItem.length = 20
-            statusItem.menu = statusMenu
-        case .countdown(let seconds):
-            button.image = NSImage(systemSymbolName: "timer", accessibilityDescription: L("Capturing soon"))
-            button.contentTintColor = nil
-            button.imagePosition = .imageLeading
-            button.title = " \(seconds)"
-            statusItem.length = NSStatusItem.variableLength
-            statusItem.menu = nil
-        case .recording:
-            button.image = MenuBarIcon.recording()
-            button.contentTintColor = nil
-            button.imagePosition = .imageLeading
-            button.title = " 0:00"
-            statusItem.length = NSStatusItem.variableLength
-            statusItem.menu = nil
+            Task { @MainActor in
+                do {
+                    let video = try await SourceVideo.load(url)
+                    openEditor(for: video)
+                } catch {
+                    Alerts.show(
+                        title: L("“%@” can't be opened", url.lastPathComponent),
+                        message: L("Lantern makes GIFs from videos, and this file has no video it can read."))
+                    /* A launch whose only file failed would otherwise sit
+                       in the Dock with no window. */
+                    if !hasVisibleWindows {
+                        showHome()
+                    }
+                }
+            }
         }
     }
 
-    private func showElapsed(_ elapsed: CMTime) {
-        guard case .recording = coordinator.state else { return }
-        let seconds = max(Int(elapsed.seconds.rounded(.down)), 0)
-        statusItem?.button?.title = String(format: " %d:%02d", seconds / 60, seconds % 60)
+    func openEditor(for video: SourceVideo) {
+        let editor = EditorWindowController(video: video)
+        editor.onClose = { [weak self, weak editor] in
+            guard let self, let editor else { return }
+            self.editors.removeAll { $0 === editor }
+            /* Back to the home window for the next video. */
+            if self.editors.isEmpty {
+                self.showHome()
+            }
+        }
+        editors.append(editor)
+        homeWindowController?.close()
+        editor.present()
     }
 
-    @objc private func statusItemClicked() {
-        switch coordinator.state {
-        case .recording: coordinator.stopRecording()
-        case .countdown: coordinator.cancel()
-        default: break
+    @objc private func chooseVideo() {
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie]
+        panel.allowsMultipleSelection = true
+        panel.message = L("Choose a video to make a GIF from.")
+        panel.prompt = L("Open")
+        if panel.runModal() == .OK {
+            open(panel.urls)
         }
     }
 
-    @objc private func beginCapture() {
-        coordinator.begin()
+    /* ⌘V with a video copied in Finder. This sits at the end of the
+       responder chain, so a focused text field (the editor's width) still
+       pastes text first. */
+    @objc func paste(_ sender: Any?) {
+        open(VideoDrop.urls(from: .general))
     }
 
-    @objc private func reopenOnboarding() {
-        showOnboarding()
-    }
-
-    @objc private func copyDiagnostics() {
-        Task { @MainActor in
-            let report = await Diagnostics.report()
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(report, forType: .string)
+    /// NSServices entry point (Info.plist NSMessage "makeGIF").
+    @objc func makeGIF(_ pasteboard: NSPasteboard, userData: String?, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        let urls = VideoDrop.urls(from: pasteboard)
+        guard !urls.isEmpty else {
+            error.pointee = L("Lantern makes GIFs from videos, and this file has no video it can read.") as NSString
+            return
         }
+        open(urls)
     }
 
-    // MARK: - Menus & windows
+    private var hasVisibleWindows: Bool {
+        NSApp.windows.contains { $0.isVisible && $0.canBecomeMain }
+    }
 
-    /* An accessory app has no visible menu bar, but ⌘-key equivalents are
-       still dispatched through the main menu — without one, ⌘W/⌘Q do
-       nothing in the settings or editor windows. */
+    private func showIntro() {
+        let intro = IntroWindowController { [weak self] in
+            AppPreferences.retireCaptureAppSettings()
+            self?.introWindowController = nil
+            if self?.editors.isEmpty == true {
+                self?.showHome()
+            }
+        }
+        introWindowController = intro
+        intro.present()
+    }
+
+    private func showHome() {
+        if homeWindowController == nil {
+            homeWindowController = HomeWindowController(
+                onOpen: { [weak self] urls in self?.open(urls) },
+                onChoose: { [weak self] in self?.chooseVideo() })
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        homeWindowController?.window?.makeKeyAndOrderFront(nil)
+    }
+
+    // MARK: - Menus
+
     private func setUpMainMenu() {
         let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(
+            title: L("About Lantern"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""))
+        appMenu.addItem(.separator())
         let settingsItem = NSMenuItem(title: L("Settings…"), action: #selector(openSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(updater.makeMenuItem())
         appMenu.addItem(.separator())
+        let servicesMenu = NSMenu(title: L("Services"))
+        let services = NSMenuItem(title: L("Services"), action: nil, keyEquivalent: "")
+        services.submenu = servicesMenu
+        NSApp.servicesMenu = servicesMenu
+        appMenu.addItem(services)
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(
+            title: L("Hide Lantern"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        let hideOthers = NSMenuItem(
+            title: L("Hide Others"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(NSMenuItem(
+            title: L("Show All"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(
             title: L("Quit Lantern"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
 
+        let fileMenu = NSMenu(title: L("File"))
+        /* The home window, for the next video, even with editors open. */
+        let newWindow = NSMenuItem(title: L("New Window"), action: #selector(newWindowAction), keyEquivalent: "n")
+        newWindow.target = self
+        fileMenu.addItem(newWindow)
+        let open = NSMenuItem(title: L("Open Video…"), action: #selector(chooseVideo), keyEquivalent: "o")
+        open.target = self
+        fileMenu.addItem(open)
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(NSMenuItem(
+            title: L("Close Window"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+
         let editMenu = NSMenu(title: L("Edit"))
+        editMenu.addItem(NSMenuItem(title: L("Undo"), action: Selector(("undo:")), keyEquivalent: "z"))
+        let redo = NSMenuItem(title: L("Redo"), action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redo)
+        editMenu.addItem(.separator())
         editMenu.addItem(NSMenuItem(title: L("Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
         editMenu.addItem(NSMenuItem(title: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         editMenu.addItem(NSMenuItem(title: L("Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
@@ -255,108 +228,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let windowMenu = NSMenu(title: L("Window"))
         windowMenu.addItem(NSMenuItem(
-            title: L("Close Window"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
-        windowMenu.addItem(NSMenuItem(
             title: L("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: L("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(NSMenuItem(
+            title: L("Bring All to Front"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        NSApp.windowsMenu = windowMenu
 
         let mainMenu = NSMenu()
-        for submenu in [appMenu, editMenu, windowMenu] {
-            let item = NSMenuItem()
+        for submenu in [appMenu, fileMenu, editMenu, windowMenu] {
+            let item = NSMenuItem(title: submenu.title, action: nil, keyEquivalent: "")
             item.submenu = submenu
             mainMenu.addItem(item)
         }
         NSApp.mainMenu = mainMenu
     }
 
-    private func observePreferenceChanges() {
-        NotificationCenter.default.addObserver(
-            forName: AppPreferences.changed, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateStatusItemVisibility()
-                self?.registerShortcut()
-            }
+    /* Paste is offered only when the clipboard holds a video. */
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(paste(_:)) {
+            return !VideoDrop.urls(from: .general).isEmpty
         }
+        return true
     }
 
-    private var isSettingsWindowVisible: Bool {
-        settingsWindowController?.window?.isVisible == true
-    }
-
-    /* Activation hand-back. An accessory app that activates itself to show
-       a window stays the active app after that window closes — macOS never
-       moves activation on window close — so a windowless Lantern would be
-       left frontmost until the user clicked elsewhere. Remember who was
-       active before we came forward and give activation back once our last
-       window is gone. */
-    private var previouslyActiveApp: NSRunningApplication?
-
-    private func comeForward() {
-        if !NSApp.isActive,
-            let front = NSWorkspace.shared.frontmostApplication,
-            front.processIdentifier != ProcessInfo.processInfo.processIdentifier
-        {
-            previouslyActiveApp = front
-        }
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func handBackActivationIfWindowless() {
-        guard NSApp.isActive, !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) else { return }
-        let previous = previouslyActiveApp
-        previouslyActiveApp = nil
-        if let previous, !previous.isTerminated, previous.activate(from: .current, options: []) {
-            return
-        }
-        /* No one to hand back to (quit meanwhile): hiding yields activation
-           to whatever the system picks next. */
-        NSApp.hide(nil)
-    }
-
-    private func observeClose(of window: NSWindow?) {
-        guard let window else { return }
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            /* isVisible is still true inside willClose; re-evaluate (leave the
-               Dock, hand activation back) on the next runloop cycle. */
-            DispatchQueue.main.async {
-                self?.updateActivationPolicy()
-                self?.handBackActivationIfWindowless()
-            }
-        }
-    }
-
-    /* Dock presence: the app normally stays invisible (accessory policy).
-       It joins the Dock while an editor is open, so the capture you are
-       working on is reachable through ⌘-Tab and window switchers like any
-       document window, and while the menu bar icon is hidden AND Settings
-       is open, when there would otherwise be no sign the app is running.
-       It leaves again when those windows close. */
-    private func updateActivationPolicy() {
-        let wantsDock = coordinator.hasOpenEditors
-            || (AppPreferences.isMenuBarIconHidden && isSettingsWindowVisible)
-        let policy: NSApplication.ActivationPolicy = wantsDock ? .regular : .accessory
-        guard NSApp.activationPolicy() != policy else { return }
-        NSApp.setActivationPolicy(policy)
-        /* Flipping the policy can drop activation; keep the front window in
-           front. Going back to accessory has to wait: macOS 27.2 (measured
-           2026-09-18) leaves the Settings window undraggable by its title bar
-           until the app goes through a real activation, and the deactivation
-           the flip causes lands asynchronously — re-activating right away
-           (even on the next run-loop turn or on didResignActive, ~10 ms) is a
-           no-op that leaves the window stuck; 50 ms was borderline, 0.2 s and
-           up always worked. */
-        if wantsDock {
-            NSApp.activate(ignoringOtherApps: true)
-            (NSApp.keyWindow ?? settingsWindowController?.window)?.makeKeyAndOrderFront(nil)
-        } else if isSettingsWindowVisible {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                guard let self, isSettingsWindowVisible else { return }
-                NSApp.activate(ignoringOtherApps: true)
-                settingsWindowController?.window?.makeKeyAndOrderFront(nil)
-            }
-        }
+    @objc private func newWindowAction() {
+        showHome()
     }
 
     @objc private func openSettingsAction() {
@@ -366,37 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openSettings() {
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(updater: updater)
-            observeClose(of: settingsWindowController?.window)
         }
-        /* Accessory apps don't come forward on their own — activate first or
-           the window opens behind the current app. */
-        comeForward()
+        NSApp.activate(ignoringOtherApps: true)
         settingsWindowController?.window?.makeKeyAndOrderFront(nil)
-        updateActivationPolicy()
-    }
-}
-
-/* One-shot report for remote debugging, copied by the status menu item. */
-enum Diagnostics {
-    static func report() async -> String {
-        var lines = ["Lantern diagnostics"]
-        let info = Bundle.main.infoDictionary
-        lines.append(
-            "version: \(info?["CFBundleShortVersionString"] as? String ?? "dev")"
-                + " (\(info?["CFBundleVersion"] as? String ?? "-"))")
-        lines.append("screen recording preflight: \(PermissionGate.hasScreenRecording)")
-        lines.append("granted at launch: \(PermissionGate.grantedAtLaunch)")
-        lines.append("shortcut: \(AppPreferences.shortcut.displayString)")
-        lines.append("save location: \(AppPreferences.saveLocation.rawValue) \(AppPreferences.resolvedSaveDirectory?.path ?? "ask")")
-        for screen in NSScreen.screens {
-            lines.append("screen: \(screen.localizedName) \(NSStringFromRect(screen.frame)) @\(screen.backingScaleFactor)x")
-        }
-        do {
-            let snapshot = try await ShareableSnapshot.fetch()
-            lines.append("SCShareableContent: \(snapshot.displays.count) displays, \(snapshot.windows.count) windows, self \(snapshot.selfApp != nil ? "found" : "missing")")
-        } catch {
-            lines.append("SCShareableContent: FAILED \(error.localizedDescription)")
-        }
-        return lines.joined(separator: "\n")
     }
 }

@@ -1,25 +1,23 @@
 import AppKit
-import Carbon.HIToolbox
-import ServiceManagement
 import SwiftUI
 
 // MARK: - Window
 
 enum SettingsPane: Int, CaseIterable {
     case general
-    case capture
+    case export
 
     var title: String {
         switch self {
         case .general: L("General")
-        case .capture: L("Capture")
+        case .export: L("Export")
         }
     }
 
     var symbolName: String {
         switch self {
         case .general: "gearshape"
-        case .capture: "camera.viewfinder"
+        case .export: "square.and.arrow.down"
         }
     }
 }
@@ -74,7 +72,8 @@ final class SettingsWindowController: NSWindowController {
    decides at that moment; resetting inside the mouse-down is too late), so
    every click in the window ends with a reset. The setter is cheap, and a
    no-op when nothing is wrong. Verified 6/6 against a deterministic repro
-   in Keystone; the shell is shared, so every Domus app carries it. */
+   in Keystone; the shell is shared, so every Domus app carries it. Lantern's
+   editor uses it too, for the switch in its inspector. */
 final class SettingsWindow: NSWindow {
     override func sendEvent(_ event: NSEvent) {
         super.sendEvent(event)
@@ -91,7 +90,7 @@ final class SettingsSplitViewController: NSSplitViewController {
     private let sidebar = SettingsSidebarViewController()
     private let paneContainer = NSViewController()
     private let generalPane: NSViewController
-    private let capturePane: NSViewController
+    private let exportPane: NSViewController
     private var currentPane: NSViewController?
 
     init(updater: UpdaterController) {
@@ -100,7 +99,7 @@ final class SettingsSplitViewController: NSSplitViewController {
            AppKit split chrome. */
         let model = SettingsModel(updater: updater)
         generalPane = NSHostingController(rootView: GeneralSettingsView(model: model))
-        capturePane = NSHostingController(rootView: CaptureSettingsView(model: model))
+        exportPane = NSHostingController(rootView: ExportSettingsView(model: model))
         super.init(nibName: nil, bundle: nil)
 
         paneContainer.view = NSView()
@@ -126,7 +125,7 @@ final class SettingsSplitViewController: NSSplitViewController {
         let next: NSViewController =
             switch pane {
             case .general: generalPane
-            case .capture: capturePane
+            case .export: exportPane
             }
         guard next !== currentPane else { return }
 
@@ -280,8 +279,7 @@ final class SettingsSidebarViewController: NSViewController, NSTableViewDataSour
 
 /* The pane's model: preferences live in UserDefaults (via AppPreferences);
    this object just republishes their change notification so SwiftUI
-   re-reads, and carries the pieces that aren't preferences (SMAppService,
-   the updater). */
+   re-reads, and carries the piece that isn't a preference (the updater). */
 final class SettingsModel: ObservableObject {
     let updater: UpdaterController
 
@@ -291,26 +289,6 @@ final class SettingsModel: ObservableObject {
             forName: AppPreferences.changed, object: nil, queue: .main
         ) { [weak self] _ in
             self?.objectWillChange.send()
-        }
-    }
-
-    /* SMAppService needs a real app bundle; a bare `swift run` binary has
-       no bundle identifier to register. */
-    var isBundledApp: Bool { Bundle.main.bundleIdentifier != nil }
-
-    var launchAtLogin: Bool {
-        get { SMAppService.mainApp.status == .enabled }
-        set {
-            do {
-                if newValue {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                NSLog("Lantern: launch-at-login change failed: \(error)")
-            }
-            objectWillChange.send()
         }
     }
 
@@ -335,41 +313,6 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                VStack(alignment: .leading, spacing: 3) {
-                    Toggle(
-                        L("Launch at login"),
-                        isOn: model.binding({ model.launchAtLogin }, { model.launchAtLogin = $0 })
-                    )
-                    .disabled(!model.isBundledApp)
-                    if !model.isBundledApp {
-                        Text(L("Available in the bundled app only (Scripts/bundle.sh)."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Toggle(
-                        L("Hide menu bar icon"),
-                        isOn: model.binding(
-                            { AppPreferences.isMenuBarIconHidden },
-                            { AppPreferences.isMenuBarIconHidden = $0 }))
-                    Text(L("While hidden, launch Lantern again to open Settings. The app appears in the Dock only while this window is open."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                LabeledContent(L("Capture shortcut")) {
-                    ShortcutRecorder(
-                        spec: model.binding({ AppPreferences.shortcut }, { AppPreferences.shortcut = $0 }))
-                }
-            } footer: {
-                Text(L("Press the shortcut again to cancel a capture in progress, or to stop a recording."))
-            }
-
             Section(L("Updates")) {
                 LabeledContent(L("Version"), value: model.versionLabel)
                 Button(L("Check for Updates…")) {
@@ -382,9 +325,9 @@ struct GeneralSettingsView: View {
     }
 }
 
-// MARK: - Capture pane
+// MARK: - Export pane
 
-struct CaptureSettingsView: View {
+struct ExportSettingsView: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
@@ -402,6 +345,7 @@ struct CaptureSettingsView: View {
                             }
                         })
                 ) {
+                    Text(L("Next to the Video")).tag(AppPreferences.SaveLocation.source)
                     Text(L("Desktop")).tag(AppPreferences.SaveLocation.desktop)
                     Text(AppPreferences.saveFolder.map { L("Folder: %@", $0.lastPathComponent) } ?? L("Other Folder…"))
                         .tag(AppPreferences.SaveLocation.folder)
@@ -411,21 +355,8 @@ struct CaptureSettingsView: View {
                     LabeledContent(L("Folder"), value: folder.path)
                     Button(L("Choose Folder…")) { model.chooseSaveFolder() }
                 }
-
-                Toggle(
-                    L("Show mouse pointer"),
-                    isOn: model.binding({ AppPreferences.showsCursor }, { AppPreferences.showsCursor = $0 }))
-
-                Picker(
-                    L("Timer"),
-                    selection: model.binding({ AppPreferences.timerSeconds }, { AppPreferences.timerSeconds = $0 })
-                ) {
-                    Text(L("None")).tag(0)
-                    Text(L("5 Seconds")).tag(5)
-                    Text(L("10 Seconds")).tag(10)
-                }
             } footer: {
-                Text(L("Images are also copied to the clipboard when saved. The same options are in the capture bar under Options."))
+                Text(L("A GIF is named after its video. If Lantern can't write next to the video, it saves to the Desktop."))
             }
         }
         .formStyle(.grouped)
@@ -439,7 +370,7 @@ extension SettingsModel {
         open.canChooseFiles = false
         open.canCreateDirectories = true
         open.prompt = L("Choose")
-        open.message = L("Choose where captures are saved.")
+        open.message = L("Choose where GIFs are saved.")
         open.directoryURL = AppPreferences.saveFolder ?? AppPreferences.desktopDirectory
         if open.runModal() == .OK, let url = open.url {
             AppPreferences.saveFolder = url
@@ -447,93 +378,5 @@ extension SettingsModel {
         } else {
             objectWillChange.send()
         }
-    }
-}
-
-// MARK: - Shortcut recorder
-
-/* A button that records the next key combination: click, press the keys,
-   done. Escape cancels; at least one of ⌃⌥⌘ is required so a plain letter
-   can't be swallowed system-wide. */
-struct ShortcutRecorder: NSViewRepresentable {
-    @Binding var spec: ShortcutSpec
-
-    func makeNSView(context: Context) -> ShortcutRecorderButton {
-        let button = ShortcutRecorderButton()
-        button.onRecord = { spec = $0 }
-        return button
-    }
-
-    func updateNSView(_ button: ShortcutRecorderButton, context: Context) {
-        button.spec = spec
-    }
-}
-
-final class ShortcutRecorderButton: NSButton {
-    var onRecord: ((ShortcutSpec) -> Void)?
-    var spec = ShortcutSpec.defaultCapture {
-        didSet { if !isRecording { refreshTitle() } }
-    }
-    private var isRecording = false
-    private var monitor: Any?
-
-    init() {
-        super.init(frame: .zero)
-        bezelStyle = .rounded
-        controlSize = .regular
-        target = self
-        action = #selector(toggleRecording)
-        setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        refreshTitle()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    private func refreshTitle() {
-        title = isRecording ? L("Type shortcut…") : spec.displayString
-        font = isRecording ? .systemFont(ofSize: 13) : .monospacedSystemFont(ofSize: 13, weight: .regular)
-    }
-
-    @objc private func toggleRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            startRecording()
-        }
-    }
-
-    private func startRecording() {
-        isRecording = true
-        refreshTitle()
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            if Int(event.keyCode) == 53 {  // Escape
-                self.stopRecording()
-                return nil
-            }
-            let modifiers = ShortcutSpec.carbonModifiers(from: event.modifierFlags)
-            let required = UInt32(controlKey) | UInt32(optionKey) | UInt32(cmdKey)
-            guard modifiers & required != 0 else {
-                NSSound.beep()
-                return nil
-            }
-            let recorded = ShortcutSpec(
-                keyCode: UInt32(event.keyCode), carbonModifiers: modifiers,
-                keyLabel: ShortcutSpec.keyLabel(for: event))
-            self.spec = recorded
-            self.stopRecording()
-            self.onRecord?(recorded)
-            return nil
-        }
-    }
-
-    private func stopRecording() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-        isRecording = false
-        refreshTitle()
     }
 }

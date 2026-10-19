@@ -19,6 +19,14 @@ SIGNATURE_ATTRS=$3
 NOTES_HTML_FILE=${4:-}
 KO_NOTES_HTML_FILE=${5:-}
 
+# 2.0 turned Lantern from a screen capture tool into a video-to-GIF
+# converter. Every item from 2.0 on is a major upgrade for 1.x (builds up
+# to 7, 1.0.5): Sparkle never installs it silently for them, even with
+# automatic updates on, and shows the update window instead, where they
+# can also skip it and keep 1.x. Compared with CFBundleVersion (the CI run
+# number), so a fixed 8 rather than this release's build.
+MINIMUM_AUTOUPDATE_BUILD=8
+
 ITEM=$(mktemp)
 {
     cat <<EOF
@@ -45,6 +53,7 @@ EOF
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>$MINIMUM_AUTOUPDATE_BUILD</sparkle:minimumAutoupdateVersion>
       <enclosure
         url="https://github.com/domus-apps/lantern/releases/download/v$VERSION/Lantern.zip"
         $SIGNATURE_ATTRS

@@ -5,12 +5,29 @@
 	<key>CFBundleAlternateNames</key>
 	<array>
 		<string>랜턴</string>
-		<string>스크린샷</string>
-		<string>화면 캡처</string>
-		<string>화면 녹화</string>
-		<string>screenshot</string>
-		<string>screen recording</string>
+		<string>GIF 만들기</string>
+		<string>GIF 변환</string>
+		<string>움짤</string>
 		<string>gif</string>
+		<string>gif maker</string>
+		<string>video to gif</string>
+	</array>
+	<!-- Open With › Lantern and drops on the app icon: any movie, as an
+	     alternate handler so it never takes over double-click. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Video</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.movie</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
@@ -33,10 +50,30 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!-- Finder's Services menu: Make GIF with Lantern (AppDelegate.makeGIF).
+	     The Korean title is in ko.lproj/ServicesMenu.strings (bundle.sh). -->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Make GIF with Lantern</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>makeGIF</string>
+			<key>NSPortName</key>
+			<string>Lantern</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.movie</string>
+			</array>
+		</dict>
+	</array>
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/domus-apps/lantern/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>

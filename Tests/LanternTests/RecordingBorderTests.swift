@@ -102,8 +102,13 @@ private func outlined(width: Int = 64, height: Int = 40, content: @escaping (Int
             width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
             space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
-    let luma = (0..<width * height).map { i in
-        UInt8((Int(rgba[i * 4]) * 54 + Int(rgba[i * 4 + 1]) * 183 + Int(rgba[i * 4 + 2]) * 19) >> 8)
+    // Spelled out step by step: as one expression it took Xcode 26.6's
+    // type checker past its time limit.
+    let luma = (0..<width * height).map { (i: Int) -> UInt8 in
+        let r: Int = Int(rgba[i * 4]) * 54
+        let g: Int = Int(rgba[i * 4 + 1]) * 183
+        let b: Int = Int(rgba[i * 4 + 2]) * 19
+        return UInt8((r + g + b) >> 8)
     }
     let whole = LumaFrame(width: width, height: height, pixels: luma)
     let edges = try #require(LumaFrame(image))

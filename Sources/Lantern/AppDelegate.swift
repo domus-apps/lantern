@@ -184,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(updater.makeMenuItem())
+        appMenu.addItem(makeWebsiteItem())
         appMenu.addItem(.separator())
         let servicesMenu = NSMenu(title: L("Services"))
         let services = NSMenuItem(title: L("Services"), action: nil, keyEquivalent: "")
@@ -254,6 +255,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc private func newWindowAction() {
         showHome()
+    }
+
+    private func makeWebsiteItem() -> NSMenuItem {
+        let item = NSMenuItem(
+            title: L("Domus Website"), action: #selector(openWebsite), keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func openWebsite() {
+        NSWorkspace.shared.open(websiteURL)
     }
 
     @objc private func openSettingsAction() {

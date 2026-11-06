@@ -4,6 +4,12 @@ All notable changes to Lantern are documented here. The release workflow publish
 
 Keep each bullet on a single line: release notes render line breaks literally (both on GitHub and in the update dialog), so wrapped lines would break mid-sentence.
 
+## 2.1.0
+
+### Added
+
+- You can open the Domus website in your language from the Lantern menu or Settings.
+
 ## 2.0.0
 
 Lantern now turns videos into GIFs.
